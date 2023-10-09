@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: jax-cfd
+Version: 0.2.0
+Home-page: https://github.com/google/jax-cfd
+Author: Google LLC
+Author-email: noreply@google.com
+License: Apache 2.0
+Requires-Python: >=3
+Provides-Extra: data
+Provides-Extra: ml
+Provides-Extra: tests
+Provides-Extra: complete
+License-File: LICENSE

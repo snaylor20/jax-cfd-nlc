@@ -87,7 +87,6 @@ def repeated(f: Callable, steps: int) -> Callable:
     return x_final
   return f_repeated
 
-
 def _identity(x):
   return x
 
