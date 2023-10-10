@@ -60,7 +60,7 @@ def nl_four_aa(u_h, v_h, gamma):
 
     ks = jnp.arange(K_aa+1)
 
-    UV_h = jax.vmap(trace_k_faf, in_axes=(0, None, None, None))(ks, U_h, V_h, gamma)
+    UV_h = jax.vmap(trace_k, in_axes=(0, None, None, None))(ks, U_h, V_h, gamma)
 
     UV = irfft(UV_h)
     uv_h = 2 * rfft(UV[::2])
