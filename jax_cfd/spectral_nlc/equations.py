@@ -32,54 +32,39 @@ TimeDependentForcingFn = Callable[[float], types.Array]
 RandomSeed = int
 ForcingModule = Callable[[grids.Grid, RandomSeed], TimeDependentForcingFn]
 
-@jax.jit
-def sum_along_k_diag(i, vals):
-   
-    UV_h_k, coeffs, k = vals
-    
-    UV_h_k = UV_h_k + coeffs[i, i+k]
-    
-    return UV_h_k, coeffs, k
-
-sum_along_k_diag = jax.jit(sum_along_k_diag)
+rfft = jax.jit(jnp.fft.rfft)
+irfft = jax.jit(jnp.fft.irfft)
 
 @jax.jit
-def trace_k(k, coeffs, K_aa):
-    
-    UV_h_k = 0
-    
-    ivals = (UV_h_k, coeffs, k)
-    
-    UV_h_k, _, _ = jax.lax.fori_loop(0, K_aa+1, sum_along_k_diag, ivals)
-    
-    return UV_h_k
+def product_k_kmm(m, k, U_h, V_h, gamma, K):
+
+    return U_h[m + K] * V_h[k-m + 2*K] * gamma[m - K, k-m-K]
+
+@jax.jit
+def trace_k(k, U_h, V_h, gamma):
+
+    K = (U_h.shape[0]-1)//2
+    ms = jnp.arange(-K, K)
+
+    sum_me = jax.vmap(product_k_kmm, in_axes=(0, None, None, None, None, None))(ms, k, U_h, V_h, gamma, K)
+    return jnp.sum(sum_me)
 
 @jax.jit
 def nl_four_aa(u_h, v_h, gamma):
-    
+
     K = u_h.shape[0] - 1
     K_aa = 2*K
-    
+
     U_h = jnp.hstack((jnp.conj(u_h[1:][::-1]), u_h))
-    V_h = jnp.hstack((jnp.conj(v_h[1:][::-1]), v_h))
-    
-    UV_h = jnp.zeros(K_aa+1, dtype=jnp.complex128)
-    
-    coeffs = jnp.outer(U_h, V_h)
-    
-    coeffs = coeffs * gamma
-    
-    coeffs = jnp.rot90(coeffs)
-    
-    coeffs = jnp.hstack((coeffs, jnp.zeros(coeffs.shape)))
-    
+    V_h = jnp.hstack((jnp.zeros(K), jnp.conj(v_h[1:][::-1]), v_h))#, jnp.zeros(K)))
+
     ks = jnp.arange(K_aa+1)
-    
-    UV_h = jax.vmap(trace_k, in_axes=(0, None, None))(ks, coeffs, K_aa)
-    
-    UV = jnp.fft.irfft(UV_h)
-    uv_h = 2 * jnp.fft.rfft(UV[::2])
-        
+
+    UV_h = jax.vmap(trace_k_faf, in_axes=(0, None, None, None))(ks, U_h, V_h, gamma)
+
+    UV = irfft(UV_h)
+    uv_h = 2 * rfft(UV[::2])
+
     return uv_h
 
 
