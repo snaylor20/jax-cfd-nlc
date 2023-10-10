@@ -32,6 +32,7 @@ TimeDependentForcingFn = Callable[[float], types.Array]
 RandomSeed = int
 ForcingModule = Callable[[grids.Grid, RandomSeed], TimeDependentForcingFn]
 
+@jax.jit
 def sum_along_k_diag(i, vals):
    
     UV_h_k, coeffs, k = vals
@@ -40,22 +41,20 @@ def sum_along_k_diag(i, vals):
     
     return UV_h_k, coeffs, k
 
-def trace_k(k, vals):
+sum_along_k_diag = jax.jit(sum_along_k_diag)
+
+@jax.jit
+def trace_k(k, coeffs, K_aa):
     
-    UV_h, coeffs = vals
-    K_aa = UV_h.shape[0]-1
-        
     UV_h_k = 0
-    
     
     ivals = (UV_h_k, coeffs, k)
     
-    UV_h_k, _, _ = jax.lax.fori_loop(0, K_aa+1, sum_along_k_diag, (ivals))
+    UV_h_k, _, _ = jax.lax.fori_loop(0, K_aa+1, sum_along_k_diag, ivals)
     
-    UV_h = UV_h.at[k].set(UV_h_k)
-    
-    return UV_h, coeffs
+    return UV_h_k
 
+@jax.jit
 def nl_four_aa(u_h, v_h, gamma):
     
     K = u_h.shape[0] - 1
@@ -74,14 +73,15 @@ def nl_four_aa(u_h, v_h, gamma):
     
     coeffs = jnp.hstack((coeffs, jnp.zeros(coeffs.shape)))
     
-    ivals = (UV_h, coeffs)
+    ks = jnp.arange(K_aa+1)
     
-    UV_h, _ = jax.lax.fori_loop(0, K_aa+1, trace_k, ivals)
+    UV_h = jax.vmap(trace_k, in_axes=(0, None, None))(ks, coeffs, K_aa)
     
     UV = jnp.fft.irfft(UV_h)
     uv_h = 2 * jnp.fft.rfft(UV[::2])
         
     return uv_h
+
 
 @dataclasses.dataclass
 class KuramotoSivashinsky_nlc(time_stepping.ImplicitExplicitODE):
