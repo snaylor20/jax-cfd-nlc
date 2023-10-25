@@ -16,6 +16,7 @@
 import dataclasses
 from typing import Callable, Sequence, TypeVar
 import tree_math
+import jax
 
 
 PyTreeState = TypeVar("PyTreeState")
@@ -95,19 +96,17 @@ def low_storage_runge_kutta_crank_nicolson(
 
   if len(alphas) - 1 != len(betas) != len(gammas):
     raise ValueError("number of RK coefficients does not match")
-
-  def step_fn(vals):
-
-    u, gamma = vals
+  
+  @jax.remat
+  def step_fn(u, gamma):
 
     h = 0
     for k in range(len(β)):
       h = F(u, gamma) + β[k] * h
       µ = 0.5 * dt * (α[k + 1] - α[k])
       u = G_inv(u + γ[k] * dt * h + µ * G(u), µ)
-    return u, gamma
+    return u
   return step_fn
-
 
 def crank_nicolson_rk3(
     equation: ImplicitExplicitODE, time_step: float,
