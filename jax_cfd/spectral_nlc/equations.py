@@ -44,7 +44,7 @@ def product_k_kmm(m, k, U_h, V_h, gamma, K):
 def trace_k(k, U_h, V_h, gamma):
 
     K = (U_h.shape[0]-1)//2
-    ms = jnp.arange(-K, K)
+    ms = jnp.arange(-K, K+1)
 
     sum_me = jax.vmap(product_k_kmm, in_axes=(0, None, None, None, None, None))(ms, k, U_h, V_h, gamma, K)
     return jnp.sum(sum_me)
