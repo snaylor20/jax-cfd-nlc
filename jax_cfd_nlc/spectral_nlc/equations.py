@@ -51,21 +51,21 @@ def trace_k(k, u_h, v_h, gamma):
 @jax.jit
 def nl_four_aa(u_h, v_h, gamma):
     
-    N = u_h.shape[0]
+    N = 2*(u_h.shape[0]-1)
         
-    ks = jnp.arange(-N//2, N//2)
+    ks = jnp.arange(0, N//2 + 1)
 
-    u_h = u_h.at[0].divide(2)
-    v_h = v_h.at[0].divide(2)
+    u_h = u_h.at[-1].divide(2)
+    v_h = v_h.at[-1].divide(2)
 
-    u_h = jnp.hstack((u_h, u_h[0]))
-    v_h = jnp.hstack((jnp.zeros(N//2), v_h, v_h[0], jnp.zeros(N//2)))
+    u_h = jnp.hstack((jnp.conj(u_h)[1:][::-1], u_h))
+    v_h = jnp.hstack((jnp.zeros(N//2), jnp.conj(v_h)[1:][::-1], v_h, jnp.zeros(N//2)))
 
     gamma = jnp.hstack((jnp.zeros((N+1, N//2)), gamma, jnp.zeros((N+1, N//2))))
     
     uv_h = jax.vmap(trace_k, in_axes=(0, None, None, None))(ks, u_h, v_h, gamma)
     
-    uv_h = uv_h.at[0].multiply(2)
+    uv_h = uv_h.at[-1].multiply(2)
         
     return uv_h
 
@@ -88,7 +88,7 @@ class KuramotoSivashinsky_nlc(time_stepping.ImplicitExplicitODE):
   smooth: bool = True
 
   def __post_init__(self):
-    self.kx, = self.grid.fftshift_axes()
+    self.kx, = self.grid.rfft_axes()
     self.two_pi_i_k = 2j * jnp.pi * self.kx
     self.linear_term = -self.two_pi_i_k ** 2 - self.two_pi_i_k ** 4
 
