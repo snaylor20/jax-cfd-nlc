@@ -88,7 +88,7 @@ class KuramotoSivashinsky_nlc(time_stepping.ImplicitExplicitODE):
   smooth: bool = True
 
   def __post_init__(self):
-    self.kx, = self.grid.fftshift_axes_axes()
+    self.kx, = self.grid.fftshift_axes()
     self.two_pi_i_k = 2j * jnp.pi * self.kx
     self.linear_term = -self.two_pi_i_k ** 2 - self.two_pi_i_k ** 4
 
