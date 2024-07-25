@@ -36,35 +36,37 @@ rfft = jax.jit(jnp.fft.rfft)
 irfft = jax.jit(jnp.fft.irfft)
 
 @jax.jit
-def product_k_kmm(m, k, U_h, V_h, gamma, K):
-
-    return U_h[m + K] * V_h[k-m + 2*K] * gamma[m - K, k-m-K]
+def product_k_kmm(m, k, u_h, v_h, gamma, N):
+    return u_h[m + N//2] * v_h[k-m + N] * gamma[m + N//2, k-m + N]
 
 @jax.jit
-def trace_k(k, U_h, V_h, gamma):
-
-    K = (U_h.shape[0]-1)//2
-    ms = jnp.arange(-K, K+1)
-
-    sum_me = jax.vmap(product_k_kmm, in_axes=(0, None, None, None, None, None))(ms, k, U_h, V_h, gamma, K)
+def trace_k(k, u_h, v_h, gamma):
+    
+    N = u_h.shape[0] - 1
+    ms = jnp.arange(-N//2, N//2+1)
+    
+    sum_me = jax.vmap(product_k_kmm, in_axes=(0, None, None, None, None, None))(ms, k, u_h, v_h, gamma, N)    
     return jnp.sum(sum_me)
 
 @jax.jit
 def nl_four_aa(u_h, v_h, gamma):
+    
+    N = u_h.shape[0]
+        
+    ks = jnp.arange(-N//2, N//2)
 
-    K = u_h.shape[0] - 1
-    K_aa = 2*K
+    u_h = u_h.at[0].divide(2)
+    v_h = v_h.at[0].divide(2)
 
-    U_h = jnp.hstack((jnp.conj(u_h[1:][::-1]), u_h))
-    V_h = jnp.hstack((jnp.zeros(K), jnp.conj(v_h[1:][::-1]), v_h))#, jnp.zeros(K)))
+    u_h = jnp.hstack((u_h, u_h[0]))
+    v_h = jnp.hstack((jnp.zeros(N//2), v_h, v_h[0], jnp.zeros(N//2)))
 
-    ks = jnp.arange(K_aa+1)
-
-    UV_h = jax.vmap(trace_k, in_axes=(0, None, None, None))(ks, U_h, V_h, gamma)
-
-    UV = irfft(UV_h)
-    uv_h = 2 * rfft(UV[::2])
-
+    gamma = jnp.hstack((jnp.zeros((N+1, N//2)), gamma, jnp.zeros((N+1, N//2))))
+    
+    uv_h = jax.vmap(trace_k, in_axes=(0, None, None, None))(ks, u_h, v_h, gamma)
+    
+    uv_h = uv_h.at[0].multiply(2)
+        
     return uv_h
 
 
@@ -86,14 +88,13 @@ class KuramotoSivashinsky_nlc(time_stepping.ImplicitExplicitODE):
   smooth: bool = True
 
   def __post_init__(self):
-    self.kx, = self.grid.rfft_axes()
+    self.kx, = self.grid.fftshift_axes_axes()
     self.two_pi_i_k = 2j * jnp.pi * self.kx
     self.linear_term = -self.two_pi_i_k ** 2 - self.two_pi_i_k ** 4
 
   def explicit_terms(self, uhat, gamma):
     """Non-linear parts of the equation, namely `- 1/2 * (u ** 2)_x`."""
-    n = (uhat.shape[0] - 1)*2 
-    uhat_squared = nl_four_aa(uhat/n, uhat/n, gamma)*n
+    uhat_squared = nl_four_aa(uhat, uhat, gamma)
     return -0.5 * self.two_pi_i_k * uhat_squared
 
   def implicit_terms(self, uhat):
